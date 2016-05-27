@@ -3,7 +3,7 @@ unit ulSystem;
 interface
 
 uses
-  SysUtils, Forms, IniFiles, ADODB, Windows;
+  SysUtils, Forms, IniFiles, ADODB, Windows, ShellAPI, Variants;
 
 type TConnIniConfig = record
   Server: string[128];
@@ -32,8 +32,11 @@ function GetConnString(Server, UID, Pwd, DBName: string): string;overload;
 //测试连接
 function TestConnString(Server, UID, Pwd, DBName: string; iTimeOut: Integer = 3000): Boolean; overload;
 function TestConnString(): Boolean; overload;
+//SQL
 function ExecuteSql(var Errmsg: string; Sql: string; connStr: string = ''; iTimeOut: Integer = 3000): Boolean;
 function GetFirstData(Sql: string; FieldName: string = ''; connStr: string = ''; iTimeOut: Integer = 3000): string;
+function ExecSQLFile(Server, Uid, Pwd, Db, sqlFilePath: string): Boolean; overload;
+function ExecSQLFile(sqlFilePath: string; sConnFileName: string = 'ConnSetting.ini'):Boolean; overload;
 
 { ============= 文件操作处理 ========}
 //创建文件夹路径
@@ -129,7 +132,7 @@ begin
   end;
 end;
 
-function SaveConnSetting(ConnSett: TConnIniConfig; sFileName: string): Boolean; overload;
+function SaveConnSetting(ConnSett: TConnIniConfig; sFileName: string): Boolean; 
 var
   IniFile: TIniFile;
 begin
@@ -146,7 +149,7 @@ begin
   end;
 end;
 
-function SaveConnSetting(Server, UID, Pwd, DBName: string; sFileName: string): Boolean; overload;
+function SaveConnSetting(Server, UID, Pwd, DBName: string; sFileName: string): Boolean; 
 var
   IniFile: TIniFile;
 begin
@@ -163,7 +166,7 @@ begin
   end;
 end;
 
-function GetConnString(ConnSett: TConnIniConfig): string; overload;
+function GetConnString(ConnSett: TConnIniConfig): string; 
 const
   c = 'Provider=SQLOLEDB.1;Password=%s;Persist Security Info=True;User ID=%s;'
     + 'Initial Catalog=%s;Data Source=%s';
@@ -171,7 +174,7 @@ begin
   Result := Format(c, [ConnSett.Passwd, ConnSett.UserID, ConnSett.DBName, ConnSett.Server]);
 end;
 
-function GetConnString(sFileName: string = 'ConnSetting.ini'): string;overload;
+function GetConnString(sFileName: string = 'ConnSetting.ini'): string;
 begin
   Result := GetConnString(GetConnSetting(sFileName));
 end;
@@ -387,7 +390,7 @@ begin
   end;
 end;
 
-function GetConnString(Server, UID, Pwd, DBName: string): string;overload;
+function GetConnString(Server, UID, Pwd, DBName: string): string;
 const
   c = 'Provider=SQLOLEDB.1;Password=%s;Persist Security Info=True;User ID=%s;'
     + 'Initial Catalog=%s;Data Source=%s';
@@ -423,7 +426,7 @@ begin
   end;
 end;
 
-function TestConnString(): Boolean; overload;
+function TestConnString(): Boolean;
 var
   connSet: TConnIniConfig;
 begin
@@ -504,6 +507,36 @@ begin
   finally
     Fconn.Free;
   end;
+end;
+
+function ExecSQLFile(Server, Uid, Pwd, Db, sqlFilePath: string): Boolean;
+var
+  iExe: Integer;
+  vExe: Variant;
+begin
+  //
+  Result := False;
+  try
+    vExe := ShellExecute(Application.Handle,'open','osql',pchar('-U '+Uid+' -P '+Pwd
+    +' -d '+Db+' -S '+Server+' -i '+sqlFilePath),nil,SW_SHOW);
+    iExe := StrToIntDef(VarToStrDef(vExe, '0'), 0);
+    if iExe > 32 then    
+      Result := True;
+  except
+//    on ex: Exception do
+//      ShowMessage(ex.Message);
+  end;
+end;
+
+function ExecSQLFile(sqlFilePath: string; sConnFileName: string = 'ConnSetting.ini'):Boolean;
+var
+  tConn: TConnIniConfig;
+begin
+  Result := False;
+  tConn := GetConnSetting(sConnFileName);
+  if not TestConnString(tConn.Server, tConn.UserID, tConn.Passwd, tConn.DBName) then
+    Exit;
+  Result := ExecSQLFile(tConn.Server, tConn.UserID, tConn.Passwd, tConn.DBName, sqlFilePath);
 end;
 
 function ReverseStr(SourceStr : string) : string;
